@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AJ ULTRA — Premium Presets</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#090b12;--panel:#121622;--panel2:#191f2d;--line:#293247;--text:#f4f6fb;--muted:#a4aec1;--gold:#d8b56d;--accent:#9d7bff;--green:#2cc58b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#24203b 0,transparent 35%),var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:22px 5%;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);position:sticky;top:0;background:#090b12ed;backdrop-filter:blur(12px);z-index:5}
+.logo{font-weight:900;letter-spacing:2px;font-size:22px}.logo span{color:var(--gold)}button,.btn{border:0;border-radius:10px;padding:11px 16px;background:linear-gradient(120deg,var(--gold),#f0d69a);color:#17130b;font-weight:800;cursor:pointer}
+button.secondary{background:var(--panel2);border:1px solid var(--line);color:var(--text)}button.danger{background:#6e2935;color:white}
+main{max-width:1100px;margin:36px auto;padding:0 18px}.hero{text-align:center;padding:48px 10px 35px}.eyebrow{color:var(--gold);letter-spacing:4px;font-size:12px;font-weight:800}.hero h1{font-size:clamp(34px,7vw,64px);margin:12px 0}.hero p,.muted{color:var(--muted)}
+.toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:24px 0;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
+.card,.box{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:17px;overflow:hidden}
+.thumb{width:100%;height:175px;object-fit:cover;background:#202637}.cardbody{padding:15px}.card h3{margin:0 0 7px}.price{color:var(--gold);font-weight:900;font-size:19px}.badge{display:inline-block;color:#17130b;background:var(--gold);padding:4px 8px;border-radius:30px;font-size:11px;font-weight:900;margin-bottom:8px}
+.box{padding:20px;margin:24px 0}.box h2{margin-top:0}.hidden{display:none!important}
+input,textarea{width:100%;padding:12px;border-radius:9px;border:1px solid var(--line);background:#0b0f19;color:var(--text);margin:6px 0 14px;font:inherit}
+label{font-size:13px;color:var(--muted)}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.actions{display:flex;gap:8px;flex-wrap:wrap}.status{padding:12px;border-radius:9px;background:#20283a;color:#dce4f5;margin:12px 0;white-space:pre-wrap}.status.ok{background:#103a2c}.status.err{background:#49202a}
+footer{text-align:center;color:var(--muted);padding:40px 10px}
+@media(max-width:620px){.formgrid{grid-template-columns:1fr}header{padding:16px 18px}.hero{padding-top:32px}}
+</style>
+</head>
+<body>
+<header><div class="logo">AJ <span>ULTRA</span></div><button class="secondary" id="adminToggle">Admin Login</button></header>
+<main>
+<section class="hero"><div class="eyebrow">PREMIUM EDITING COLLECTION</div><h1>Make Every Edit <span style="color:var(--gold)">Ultra.</span></h1><p>Alight Motion presets • Curated for creators</p></section>
+<div id="notice" class="status hidden"></div>
+<section id="adminBox" class="box hidden">
+  <h2>Admin Panel</h2>
+  <div id="loginArea">
+    <p class="muted">अपने Supabase Admin account से लॉगिन करें।</p>
+    <label>Email</label><input id="email" type="email" autocomplete="username" placeholder="Admin email">
+    <label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+  </div>
+  <div id="manageArea" class="hidden">
+    <div class="toolbar"><span class="muted" id="signedIn"></span><button class="secondary" id="logoutBtn">Logout</button></div>
+    <h3 id="formTitle">नया Preset जोड़ें</h3>
+    <form id="presetForm">
+      <input type="hidden" id="editId">
+      <div class="formgrid">
+        <div><label>Preset का नाम</label><input id="name" required maxlength="100" placeholder="उदा. Velocity Shake"></div>
+        <div><label>कीमत (₹)</label><input id="price" type="number" min="0" step="1" required placeholder="उदा. 49"></div>
+      </div>
+      <label>छोटा Description</label><textarea id="description" rows="2" placeholder="Preset के बारे में लिखें"></textarea>
+      <div class="formgrid">
+        <div><label>Badge (वैकल्पिक)</label><input id="badge" placeholder="BESTSELLER / NEW"></div>
+        <div><label>Preview Image (मोबाइल Gallery से)</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp"></div>
+      </div>
+      <label>Google Drive Share Link (अभी Admin में ही सेव होगा)</label><input id="drive" type="url" placeholder="https://drive.google.com/...">
+      <div class="actions"><button type="submit" id="saveBtn">Preset Save करें</button><button type="button" class="secondary hidden" id="cancelEdit">Cancel Edit</button></div>
+    </form>
+    <p class="muted">ध्यान दें: यह अभी Preset catalogue और Admin upload है। UPI payment verification और ग्राहक को सुरक्षित download देने की सुविधा अभी इसमें शामिल नहीं है।</p>
+  </div>
+</section>
+<div class="toolbar"><h2>Latest Presets</h2><span class="muted" id="count"></span></div>
+<section id="catalog" class="grid"></section>
+</main>
+<footer>© <span id="year"></span> AJ ULTRA • Create Beyond Limits</footer>
+<script>
+/* अपनी Supabase Project Settings से ये दो values भरें।
+   केवल Project URL और Publishable/anon public key इस्तेमाल करें।
+   service_role / secret key कभी यहाँ न डालें। */
+const SUPABASE_URL = "https://zeokhikhddpqvctqotoh.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_UtFPA_aFlfQvgCLxGCowWg_RrmaMMGf";
+const BUCKET = "preset-images";
+const configured = SUPABASE_URL.startsWith("https://") && !SUPABASE_ANON_KEY.includes("PASTE_");
+const client = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const $ = id => document.getElementById(id);
+let currentUser = null;
+function message(text,type=""){const n=$("notice");n.textContent=text;n.className="status "+type;n.classList.remove("hidden");}
+function clearMessage(){$("notice").classList.add("hidden")}
+function money(v){return "₹"+Number(v||0).toLocaleString("en-IN")}
+function safe(s=""){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function showAuth(){ $("loginArea").classList.toggle("hidden",!!currentUser); $("manageArea").classList.toggle("hidden",!currentUser); $("adminToggle").textContent=currentUser?"Admin Panel":"Admin Login"; if(currentUser)$("signedIn").textContent="लॉगिन: "+currentUser.email; }
+async function loadPresets(){
+ if(!client){$("catalog").innerHTML="<div class='box'>वेबसाइट सेटअप पूरा करने के लिए HTML में Supabase Project URL और Publishable Key भरें।</div>";return}
+ const {data,error}=await client.from("presets").select("id,name,description,price,badge,preview_url,created_at").eq("is_published",true).order("created_at",{ascending:false});
+ if(error){message("Presets लोड नहीं हुए: "+error.message,"err");return}
+ $("count").textContent=(data?.length||0)+" presets";
+ $("catalog").innerHTML=(data||[]).map(p=>`<article class="card"><img class="thumb" src="${safe(p.preview_url||"")}" alt="${safe(p.name)}" onerror="this.style.visibility='hidden'"><div class="cardbody">${p.badge?`<span class="badge">${safe(p.badge)}</span>`:""}<h3>${safe(p.name)}</h3><p class="muted">${safe(p.description||"")}</p><div class="price">${money(p.price)}</div>${currentUser?`<div class="actions" style="margin-top:12px"><button class="secondary" onclick="editPreset('${p.id}')">Edit</button><button class="danger" onclick="deletePreset('${p.id}')">Delete</button></div>`:""}</div></article>`).join("") || "<div class='box'>अभी कोई Preset उपलब्ध नहीं है।</div>";
+}
+async function login(){
+ clearMessage();const {data,error}=await client.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+ if(error){message("Login नहीं हुआ: "+error.message,"err");return}
+ currentUser=data.user;showAuth();await loadPresets();message("Admin login सफल!","ok");
+}
+async function logout(){await client.auth.signOut();currentUser=null;showAuth();await loadPresets();message("Logout हो गया।")}
+async function uploadImage(file){
+ if(!file)return null;
+ if(!["image/jpeg","image/png","image/webp"].includes(file.type))throw new Error("केवल JPG, PNG या WEBP image चुनें।");
+ if(file.size>5*1024*1024)throw new Error("Image 5 MB से छोटी होनी चाहिए।");
+ const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
+ const path=`${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+ const {error}=await client.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:false});
+ if(error)throw error;
+ return client.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+async function savePreset(e){
+ e.preventDefault();if(!currentUser)return;
+ const btn=$("saveBtn");btn.disabled=true;btn.textContent="Saving...";
+ try{
+  let preview=$("image").files[0]?await uploadImage($("image").files[0]):null;
+  const id=$("editId").value;
+  const row={name:$("name").value.trim(),description:$("description").value.trim(),price:Number($("price").value),badge:$("badge").value.trim()||null,is_published:true};
+  if(preview)row.preview_url=preview;
+  let result=id?await client.from("presets").update(row).eq("id",id).select().single():await client.from("presets").insert(row).select().single();
+  if(result.error)throw result.error;
+  const presetId=result.data.id;
+  const drive=$("drive").value.trim();
+  const {data:oldFiles,error:readErr}=await client.from("preset_files").select("id").eq("preset_id",presetId);
+  if(readErr)throw readErr;
+  if(oldFiles?.length){
+    if(drive){const {error}=await client.from("preset_files").update({drive_url:drive}).eq("id",oldFiles[0].id);if(error)throw error;}
+    else {const {error}=await client.from("preset_files").delete().eq("preset_id",presetId);if(error)throw error;}
+  } else if(drive){const {error}=await client.from("preset_files").insert({preset_id:presetId,drive_url:drive});if(error)throw error;}
+  resetForm();message("Preset सफलतापूर्वक सेव हो गया।","ok");await loadPresets();
+ }catch(err){message("Save नहीं हुआ: "+(err.message||String(err)),"err")}
+ finally{btn.disabled=false;btn.textContent="Preset Save करें"}
+}
+window.editPreset=async id=>{
+ const {data:p,error}=await client.from("presets").select("*").eq("id",id).single();if(error){message(error.message,"err");return}
+ const {data:f}=await client.from("preset_files").select("drive_url").eq("preset_id",id).limit(1).maybeSingle();
+ $("editId").value=p.id;$("name").value=p.name;$("price").value=p.price;$("description").value=p.description||"";$("badge").value=p.badge||"";$("drive").value=f?.drive_url||"";
+ $("formTitle").textContent="Preset Edit करें";$("saveBtn").textContent="Changes Save करें";$("cancelEdit").classList.remove("hidden");$("adminBox").scrollIntoView({behavior:"smooth"});
+};
+window.deletePreset=async id=>{
+ if(!confirm("क्या यह Preset हटाना चाहते हैं?"))return;
+ const {error}=await client.from("presets").delete().eq("id",id);if(error){message("Delete नहीं हुआ: "+error.message,"err");return}
+ message("Preset हटा दिया गया।","ok");await loadPresets();
+};
+function resetForm(){$("presetForm").reset();$("editId").value="";$("formTitle").textContent="नया Preset जोड़ें";$("saveBtn").textContent="Preset Save करें";$("cancelEdit").classList.add("hidden")}
+$("year").textContent=new Date().getFullYear();
+$("adminToggle").onclick=()=>{$("adminBox").classList.toggle("hidden");$("adminBox").scrollIntoView({behavior:"smooth"})};
+$("loginBtn").onclick=login;$("logoutBtn").onclick=logout;$("presetForm").onsubmit=savePreset;$("cancelEdit").onclick=resetForm;
+if(client){client.auth.getSession().then(({data})=>{currentUser=data.session?.user||null;showAuth();loadPresets()});client.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;showAuth();loadPresets()})}else loadPresets();
+</script>
+</body>
+</html>
