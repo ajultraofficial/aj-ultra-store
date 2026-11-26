@@ -7,6 +7,7 @@
 <meta name="description" content="AJ ULTRA — creative Alight Motion presets for every edit.">
 <title>AJ ULTRA — Create Beyond Limits</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <style>
 :root{--bg:#080711;--panel:#151020;--panel2:#21142e;--line:#49305e;--text:#faf6ff;--muted:#b9aec8;--purple:#a875ff;--pink:#ed77c8;--orange:#ff9a58;--green:#42d6a0}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:90px}body{margin:0;background:radial-gradient(ellipse at 76% 4%,#48205c88 0,transparent 33%),radial-gradient(ellipse at 5% 38%,#25205a55 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif;overflow-x:hidden}
@@ -158,7 +159,7 @@ function renderPresets(){
  $("catalog").innerHTML=list.map(p=>`<article class="card">
    ${p.preview_video_url?videoMarkup(p.preview_video_url,p.name):p.preview_url?`<img class="thumb" src="${safe(p.preview_url)}" alt="${safe(p.name)}" loading="lazy" onerror="this.style.display='none'">`:`<div class="thumb" aria-label="Preset preview placeholder" style="display:grid;place-items:center;font-size:42px;color:#d3a2ff">✦</div>`}
    <div class="cardbody">${p.badge?`<span class="badge">${safe(p.badge)}</span>`:""}<h3>${safe(p.name)}</h3><p class="muted">${safe(p.description||"Alight Motion preset")}</p><div class="price">${money(p.price)}</div>
-   ${isAdmin?`<div class="card-actions"><button class="secondary" onclick="editPreset('${p.id}')">Edit</button><button class="danger" onclick="deletePreset('${p.id}')">Delete</button></div>`:`<div class="card-actions"><button type="button" class="secondary" onclick="message('Preset details ke liye AJ ULTRA se contact karein.','')">Details</button></div>`}
+   ${isAdmin?`<div class="card-actions"><button class="secondary" onclick="editPreset('${p.id}')">Edit</button><button class="danger" onclick="deletePreset('${p.id}')">Delete</button></div>`:`<div class="card-actions"><button type="button" onclick="buyPreset('${p.id}')">${Number(p.price)>0?"Pay Now":"Free Preset"}</button></div>`}
    </div></article>`).join("")||`<div class="empty">No matching presets found. Try another keyword or category.</div>`;
 }
 async function loadPresets(){
@@ -167,6 +168,37 @@ async function loadPresets(){
  if(error){message("Presets load नहीं हुए: "+error.message,"err");return}
  allPresets=data||[];renderPresets();
 }
+
+async function buyPreset(presetId){
+ const preset=allPresets.find(p=>String(p.id)===String(presetId));
+ if(!preset){message("Preset नहीं मिला। पेज refresh करें।","err");return}
+ if(Number(preset.price)<=0){message("यह preset free है। Download link के लिए AJ ULTRA से संपर्क करें।");return}
+ if(typeof Razorpay==="undefined"){message("Razorpay Checkout load नहीं हुआ। Internet जाँचें।","err");return}
+ try{
+  message("Secure payment तैयार हो रहा है...");
+  const r=await fetch(`${SUPABASE_URL}/functions/v1/create-razorpay-order`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY},body:JSON.stringify({preset_id:preset.id})});
+  const order=await r.json();if(!r.ok)throw new Error(order.error||"Order create नहीं हुआ।");
+  const checkout=new Razorpay({
+   key:order.key_id,amount:order.amount,currency:order.currency||"INR",
+   name:"AJ ULTRA",description:preset.name,order_id:order.order_id,
+   theme:{color:"#a875ff"},
+   handler:async function(payment){
+    let tab=window.open("about:blank","_blank");
+    try{
+     message("Payment verify हो रहा है...");
+     const vr=await fetch(`${SUPABASE_URL}/functions/v1/verify-razorpay-payment`,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY},body:JSON.stringify({preset_id:preset.id,razorpay_order_id:payment.razorpay_order_id,razorpay_payment_id:payment.razorpay_payment_id,razorpay_signature:payment.razorpay_signature})});
+     const result=await vr.json();if(!vr.ok||!result.verified)throw new Error(result.error||"Payment verify नहीं हुआ।");
+     message("Payment successful! Download link खुल रहा है।","ok");
+     if(tab)tab.location.href=result.drive_url;else message("Payment successful! Download link: "+result.drive_url,"ok");
+    }catch(e){if(tab)tab.close();message("Verification: "+(e.message||String(e))+". Transaction ID सुरक्षित रखें और support से संपर्क करें।","err")}
+   },
+   modal:{ondismiss:()=>message("Payment window बंद हुआ। अगर पैसे कटे हों तो दोबारा payment न करें; पहले transaction status जाँचें।","")}
+  });
+  checkout.on("payment.failed",e=>message("Payment failed: "+(e.error?.description||"कृपया बाद में कोशिश करें।"),"err"));
+  checkout.open();
+ }catch(e){message("Checkout शुरू नहीं हुआ: "+(e.message||String(e)),"err")}
+}
+
 async function login(){
  clearMessage();
  if(!client){message("Supabase configure नहीं है। URL और Publishable key जाँचें।","err");return}
