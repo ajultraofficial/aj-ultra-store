@@ -75,6 +75,7 @@ footer{text-align:center;color:var(--muted);padding:30px 10px 45px;border-top:1p
         <div><label>Preview Image (मोबाइल Gallery से)</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp"></div>
       </div>
       <label>Preview Video URL (MP4/WebM direct link या YouTube link)</label><input id="videoUrl" type="url" placeholder="https://.../preview.mp4 या YouTube URL">
+      <label>या Preview Video (मोबाइल Gallery से — MP4/WebM/MOV, अधिकतम 50 MB)</label><input id="videoFile" type="file" accept="video/mp4,video/webm,video/quicktime">
       <label>Google Drive Share Link</label><input id="drive" type="url" placeholder="https://drive.google.com/...">
       <div class="actions"><button type="submit" id="saveBtn">Preset Save करें</button><button type="button" class="secondary hidden" id="cancelEdit">Cancel Edit</button></div>
     </form>
@@ -119,10 +120,11 @@ function clearMessage(){$("notice").classList.add("hidden")}
 function money(v){return Number(v)===0?"Free":"₹"+Number(v||0).toLocaleString("en-IN")}
 function safe(s=""){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function showAuth(){
- $("loginArea").classList.toggle("hidden",!!currentUser);
+ // A non-admin session must never hide the login form or reveal the dashboard.
+ $("loginArea").classList.toggle("hidden",isAdmin);
  $("manageArea").classList.toggle("hidden",!isAdmin);
  $("adminToggle").textContent=isAdmin?"Admin Panel":"Admin Login";
- if(currentUser)$("signedIn").textContent="लॉगिन: "+(currentUser.email||"Admin");
+ if(isAdmin)$("signedIn").textContent="लॉगिन: "+(currentUser?.email||"Admin");
 }
 function categoryOf(p){
  const text=((p.name||"")+" "+(p.description||"")+" "+(p.badge||"")).toLowerCase();
@@ -154,4 +156,128 @@ function renderPresets(){
  list.sort((a,b)=>{if(sort==="oldest")return new Date(a.created_at)-new Date(b.created_at);if(sort==="low")return Number(a.price)-Number(b.price);if(sort==="high")return Number(b.price)-Number(a.price);if(sort==="az")return String(a.name).localeCompare(String(b.name));return new Date(b.created_at)-new Date(a.created_at)});
  $("count").textContent=`${list.length} / ${allPresets.length} presets`;
  $("catalog").innerHTML=list.map(p=>`<article class="card">
-   ${p.preview_video_url?videoMarkup(p.preview_video_url,p.name):p.preview_url?`<img class="thumb" src="${safe(p.preview_url)}" alt="${safe(p.name)}" loading="lazy" onerror="this.style.display='none'">`:
+   ${p.preview_video_url?videoMarkup(p.preview_video_url,p.name):p.preview_url?`<img class="thumb" src="${safe(p.preview_url)}" alt="${safe(p.name)}" loading="lazy" onerror="this.style.display='none'">`:`<div class="thumb" aria-label="Preset preview placeholder" style="display:grid;place-items:center;font-size:42px;color:#d3a2ff">✦</div>`}
+   <div class="cardbody">${p.badge?`<span class="badge">${safe(p.badge)}</span>`:""}<h3>${safe(p.name)}</h3><p class="muted">${safe(p.description||"Alight Motion preset")}</p><div class="price">${money(p.price)}</div>
+   ${isAdmin?`<div class="card-actions"><button class="secondary" onclick="editPreset('${p.id}')">Edit</button><button class="danger" onclick="deletePreset('${p.id}')">Delete</button></div>`:`<div class="card-actions"><button type="button" class="secondary" onclick="message('Preset details ke liye AJ ULTRA se contact karein.','')">Details</button></div>`}
+   </div></article>`).join("")||`<div class="empty">No matching presets found. Try another keyword or category.</div>`;
+}
+async function loadPresets(){
+ if(!client){$("catalog").innerHTML="<div class='empty'>Supabase key configure नहीं है। Publish करने से पहले exact Publishable key जाँचें।</div>";$("count").textContent="";return}
+ const {data,error}=await client.from("presets").select("id,name,description,price,badge,preview_url,preview_video_url,created_at").eq("is_published",true).order("created_at",{ascending:false});
+ if(error){message("Presets load नहीं हुए: "+error.message,"err");return}
+ allPresets=data||[];renderPresets();
+}
+async function login(){
+ clearMessage();
+ if(!client){message("Supabase configure नहीं है। URL और Publishable key जाँचें।","err");return}
+ const email=$("email").value.trim(),password=$("password").value;
+ if(!email||!password){message("Admin email और password दोनों भरें।","err");return}
+ const btn=$("loginBtn");btn.disabled=true;btn.textContent="Logging in...";
+ try{
+  const {data,error}=await client.auth.signInWithPassword({email,password});
+  if(error)throw error;
+  if(data.user?.id!==ADMIN_USER_ID){
+   await client.auth.signOut();
+   currentUser=null;isAdmin=false;showAuth();
+   throw new Error("इस account को Admin access नहीं है। Admin User ID जाँचें।");
+  }
+  currentUser=data.user;isAdmin=true;showAuth();renderPresets();
+  message("Admin login सफल!","ok");
+ }catch(err){message("Login नहीं हुआ: "+(err.message||String(err)),"err")}
+ finally{btn.disabled=false;btn.textContent="Login"}
+}
+async function logout(){if(client)await client.auth.signOut();currentUser=null;isAdmin=false;showAuth();renderPresets();message("Logout हो गया।")}
+async function uploadImage(file){
+ if(!file)return null;
+ if(!["image/jpeg","image/png","image/webp"].includes(file.type))throw new Error("केवल JPG, PNG या WEBP image चुनें।");
+ if(file.size>5*1024*1024)throw new Error("Image 5 MB से छोटी होनी चाहिए।");
+ const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
+ const path=`${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+ const {error}=await client.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:false});
+ if(error)throw error;return client.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+async function uploadVideo(file){
+ if(!file)return null;
+ const allowed=["video/mp4","video/webm","video/quicktime"];
+ if(!allowed.includes(file.type))throw new Error("केवल MP4, WebM या MOV वीडियो चुनें।");
+ if(file.size>50*1024*1024)throw new Error("Video 50 MB से छोटी होनी चाहिए।");
+ if(!isAdmin||!currentUser)throw new Error("Video upload करने के लिए Admin login जरूरी है।");
+ const ext=file.type==="video/webm"?"webm":file.type==="video/quicktime"?"mov":"mp4";
+ const path=`${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+ message("Video upload हो रहा है... कृपया पेज बंद न करें।");
+ const {error}=await client.storage.from("preset-videos").upload(path,file,{contentType:file.type,upsert:false});
+ if(error)throw error;
+ return client.storage.from("preset-videos").getPublicUrl(path).data.publicUrl;
+}
+async function savePreset(e){
+ e.preventDefault();if(!isAdmin)return;
+ const btn=$("saveBtn");btn.disabled=true;btn.textContent="Saving...";
+ try{
+  let preview=$("image").files[0]?await uploadImage($("image").files[0]):null;
+  const id=$("editId").value;
+  const uploadedVideo=$("videoFile").files[0]?await uploadVideo($("videoFile").files[0]):null;
+  const videoUrl=uploadedVideo||$("videoUrl").value.trim();
+  if(videoUrl&&!/^https?:\/\//i.test(videoUrl))throw new Error("Preview video URL https:// से शुरू होना चाहिए।");
+  const row={name:$("name").value.trim(),description:$("description").value.trim(),price:Number($("price").value),badge:$("badge").value.trim()||null,is_published:true,preview_video_url:videoUrl||null};
+  if(preview)row.preview_url=preview;
+  let result=id?await client.from("presets").update(row).eq("id",id).select().single():await client.from("presets").insert(row).select().single();
+  if(result.error)throw result.error;
+  const presetId=result.data.id,drive=$("drive").value.trim();
+  const {data:oldFiles,error:readErr}=await client.from("preset_files").select("id").eq("preset_id",presetId);
+  if(readErr)throw readErr;
+  if(oldFiles?.length){if(drive){const {error}=await client.from("preset_files").update({drive_url:drive}).eq("id",oldFiles[0].id);if(error)throw error;}else{const {error}=await client.from("preset_files").delete().eq("preset_id",presetId);if(error)throw error;}}
+  else if(drive){const {error}=await client.from("preset_files").insert({preset_id:presetId,drive_url:drive});if(error)throw error;}
+  resetForm();message("Preset सफलतापूर्वक सेव हो गया।","ok");await loadPresets();
+ }catch(err){message("Save नहीं हुआ: "+(err.message||String(err)),"err")}
+ finally{btn.disabled=false;btn.textContent="Preset Save करें"}
+}
+window.editPreset=async id=>{
+ if(!isAdmin)return;
+ const {data:p,error}=await client.from("presets").select("*").eq("id",id).single();if(error){message(error.message,"err");return}
+ const {data:f}=await client.from("preset_files").select("drive_url").eq("preset_id",id).limit(1).maybeSingle();
+ $("editId").value=p.id;$("name").value=p.name;$("price").value=p.price;$("description").value=p.description||"";$("badge").value=p.badge||"";$("videoUrl").value=p.preview_video_url||"";$("drive").value=f?.drive_url||"";
+ $("formTitle").textContent="Preset Edit करें";$("saveBtn").textContent="Changes Save करें";$("cancelEdit").classList.remove("hidden");$("adminBox").scrollIntoView({behavior:"smooth"});
+};
+window.deletePreset=async id=>{
+ if(!isAdmin)return;if(!confirm("क्या यह Preset हटाना चाहते हैं?"))return;
+ const {error}=await client.from("presets").delete().eq("id",id);if(error){message("Delete नहीं हुआ: "+error.message,"err");return}
+ message("Preset हटा दिया गया।","ok");await loadPresets();
+};
+function resetForm(){$("presetForm").reset();$("editId").value="";$("formTitle").textContent="नया Preset जोड़ें";$("saveBtn").textContent="Preset Save करें";$("cancelEdit").classList.add("hidden")}
+$("year").textContent=new Date().getFullYear();
+$("adminToggle").onclick=()=>{$("adminBox").classList.toggle("hidden");$("adminBox").scrollIntoView({behavior:"smooth"})};
+$("loginBtn").onclick=login;$("logoutBtn").onclick=logout;$("presetForm").onsubmit=savePreset;$("cancelEdit").onclick=resetForm;
+$("searchInput").addEventListener("input",renderPresets);$("categoryFilter").addEventListener("change",renderPresets);$("sortFilter").addEventListener("change",renderPresets);
+document.querySelectorAll(".categoryBtn").forEach(btn=>btn.addEventListener("click",()=>{$("categoryFilter").value=btn.dataset.category;renderPresets()}));
+$("clearFilters").onclick=()=>{$("searchInput").value="";$("categoryFilter").value="all";$("sortFilter").value="newest";renderPresets()};
+if(client){
+ client.auth.onAuthStateChange((_event,session)=>{
+  currentUser=session?.user||null;
+  isAdmin=currentUser?.id===ADMIN_USER_ID;
+  showAuth();
+  renderPresets();
+  // Clear any saved non-admin session without blocking the auth callback.
+  if(currentUser&&!isAdmin)setTimeout(()=>client.auth.signOut(),0);
+ });
+ (async()=>{
+  try{
+   const {data,error}=await client.auth.getSession();
+   if(error)throw error;
+   const user=data.session?.user||null;
+   if(user&&user.id!==ADMIN_USER_ID){
+    await client.auth.signOut();
+    currentUser=null;isAdmin=false;
+   }else{
+    currentUser=user;isAdmin=!!user;
+   }
+   showAuth();
+   await loadPresets();
+  }catch(err){showAuth();message("Supabase session error: "+(err.message||String(err)),"err")}
+ })();
+}else{
+ showAuth();
+ loadPresets();
+}
+</script>
+</body>
+</html>
