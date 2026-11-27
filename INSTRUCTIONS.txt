@@ -1,0 +1,36 @@
+AJ ULTRA PWA — CUSTOM LOGO + APP NAME
+
+App name (exact): ᴀᴊ ᴜlᴛʀα
+
+1) Upload these files/folders to the ROOT of your GitHub repository:
+   manifest.webmanifest
+   sw.js
+   icons/icon-192.png
+   icons/icon-512.png
+
+2) In your index.html, inside <head>, add:
+<link rel="manifest" href="/aj-ultra-store/manifest.webmanifest">
+<meta name="theme-color" content="#172027">
+<link rel="apple-touch-icon" href="/aj-ultra-store/icons/icon-192.png">
+
+3) Just before </body>, add:
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/aj-ultra-store/sw.js")
+        .catch((error) => console.error("Service worker registration failed:", error));
+    });
+  }
+</script>
+
+4) Commit/publish the changes. Then open your website in Chrome and choose
+   "Install app" or "Add to Home screen" if offered.
+
+5) For an Android APK, test the updated website at PWABuilder:
+   https://www.pwabuilder.com/
+
+NOTE:
+- This package uses the current GitHub Pages path /aj-ultra-store/.
+- If the repository path changes, update the paths above.
+- Your uploaded artwork is used as the app icon; the app name is exactly as supplied.
+- The PWA files do not themselves build or publish an APK.
